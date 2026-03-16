@@ -18,7 +18,7 @@
 
   #ar { display: none; position: fixed; inset: 0; background: #000; }
   #ar.active { display: block; }
-  #video { display: none; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #video { display: none; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   #ar.active #video { display: block; }
   #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
@@ -27,6 +27,7 @@
   #back-btn    { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: #eee; border: 1px solid #555; font-family: monospace; font-size: 0.75rem; padding: 4px 10px; cursor: pointer; }
   #recalib-btn { position: absolute; top: 36px; right: 8px; background: rgba(0,0,0,0.7); color: #aaa; border: 1px solid #444; font-family: monospace; font-size: 0.7rem; padding: 4px 10px; cursor: pointer; display: none; }
   #recalib-btn.visible { display: block; }
+  #flip-btn { position: absolute; top: 64px; right: 8px; background: rgba(0,0,0,0.7); color: #aaa; border: 1px solid #444; font-family: monospace; font-size: 0.7rem; padding: 4px 10px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -49,6 +50,7 @@
   <div id="info">—</div>
   <button id="back-btn">← back</button>
   <button id="recalib-btn">recalibrate</button>
+  <button id="flip-btn">flip camera</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -67,6 +69,7 @@ const POSE_LOSS_MS = 2500;
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let userHeightCm = 178;
 let cvReady = false, pendingStart = false;
+let facingMode = 'user'; // 'user' = front, 'environment' = back
 
 let scene, threeCamera, renderer, roomWireframe, playerGroup;
 let phase = 'waiting';        // waiting → calib → done
@@ -92,6 +95,11 @@ document.getElementById('start-btn').addEventListener('click', () => {
 
 document.getElementById('back-btn').addEventListener('click',    () => location.reload());
 document.getElementById('recalib-btn').addEventListener('click', resetCalibration);
+document.getElementById('flip-btn').addEventListener('click', async () => {
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  await restartCamera();
+  resetCalibration();
+});
 
 function resetCalibration() {
   phase = 'calib'; calibSamples = []; cameraPitchRad = null; cameraHeightM = null;
@@ -247,28 +255,59 @@ function darken(hex, f) {
 }
 
 // ─── MEDIAPIPE ────────────────────────────────────────────────────────────────
+let activeStream = null;
+
+async function restartCamera() {
+  const video = document.getElementById('video');
+  if (activeStream) { activeStream.getTracks().forEach(t => t.stop()); activeStream = null; }
+  video.style.transform = 'none';
+
+  // Try progressively less specific constraints until one works.
+  // zoom:1 and width:9999 both nudge Android Chrome toward the widest lens.
+  const attempts = [
+    { facingMode, width: { ideal: 9999 }, height: { ideal: 9999 }, zoom: { ideal: 1 } },
+    { facingMode, width: { ideal: 9999 }, height: { ideal: 9999 } },
+    { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+    { facingMode },
+  ];
+
+  for (const constraints of attempts) {
+    try {
+      activeStream = await navigator.mediaDevices.getUserMedia({ video: constraints, audio: false });
+      break;
+    } catch(e) { /* try next */ }
+  }
+
+  if (!activeStream) { setStatus('Camera error — could not open camera'); return; }
+
+  // After stream is open, apply minimum zoom via applyConstraints if supported
+  const track = activeStream.getVideoTracks()[0];
+  if (track?.getCapabilities) {
+    const caps = track.getCapabilities();
+    if (caps.zoom?.min != null) {
+      try { await track.applyConstraints({ advanced: [{ zoom: caps.zoom.min }] }); } catch(e) {}
+    }
+  }
+
+  video.srcObject = activeStream;
+  await video.play();
+  camW = video.videoWidth || 640;
+  camH = video.videoHeight || 480;
+  camAspect = camW / camH;
+  threeCamera.aspect = camAspect;
+  threeCamera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
 function initMediaPipe() {
   const video = document.getElementById('video');
 
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
-    .then(stream => {
-      video.srcObject = stream;
-      video.play();
-      video.addEventListener('loadedmetadata', () => {
-        camW = video.videoWidth || 640;
-        camH = video.videoHeight || 480;
-        camAspect = camW / camH;
-        threeCamera.aspect = camAspect;
-        threeCamera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        phase = 'calib';
-        setStatus('Calibrating — stand still, full body visible…');
-      }, { once: true });
-    })
-    .catch(err => setStatus('Camera error: ' + err.message));
+  restartCamera().then(() => {
+    phase = 'calib';
+    setStatus('Calibrating — stand still, full body visible…');
+  });
 
-  const pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-  pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+  const pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });  pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
   pose.onResults(r => {
     if (!r.poseLandmarks || !r.poseWorldLandmarks) return;
     lastPoseTime = performance.now();
@@ -310,7 +349,7 @@ function solveCameraPose(lm2d, lmWorld) {
   for (const i of valid) {
     const w = lmWorld[i];
     objPts.push(w.x * scale, -w.y * scale + floorY, w.z * scale);
-    imgPts.push((1 - lm2d[i].x) * camW, lm2d[i].y * camH); // mirror x
+    imgPts.push(lm2d[i].x * camW, lm2d[i].y * camH);
   }
 
   const objMat     = cv.matFromArray(valid.length, 3, cv.CV_64F, objPts);
@@ -406,6 +445,18 @@ function processPose(lm, lmWorld) {
 
   // ── TRACKING ─────────────────────────────────────────────────────────────
 
+  // Background drift correction: blend solvePnP result slowly into locked pose.
+  // Small lerp (0.005) and tight clamps prevent noise from causing visible jumps.
+  const pnp = solveCameraPose(lm, lmWorld);
+  if (pnp) {
+    const newHeight = Math.max(cameraHeightM * 0.85, Math.min(cameraHeightM * 1.15, pnp.camHeight));
+    const newPitch  = Math.max(cameraPitchRad - 0.05, Math.min(cameraPitchRad + 0.05, pnp.pitchRad));
+    cameraHeightM  += (newHeight - cameraHeightM)  * 0.005;
+    cameraPitchRad += (newPitch  - cameraPitchRad) * 0.005;
+    threeCamera.position.y = cameraHeightM;
+    threeCamera.rotation.x = -cameraPitchRad;
+  }
+
   // Distance: D = cameraHeight / tan(pitch + footAngle)
   const totalAngle = cameraPitchRad + (footNormY - 0.5) * VFOV_RAD;
   const distM = Math.max(0.5, Math.min(ROOM_D - 0.5,
@@ -419,22 +470,15 @@ function processPose(lm, lmWorld) {
   smoothZ += (-distM * 0.9 - smoothZ) * 0.1;
 
   // X: place player just outside the person's right edge in world space.
-  //
-  // 1. Find the rightmost visible upper-body landmark in normalised screen X.
-  //    We use shoulders, elbows, wrists and hips — whichever is furthest right.
-  //    (MediaPipe x=0 is left edge, x=1 is right edge of frame; video is mirrored
-  //    for display so screen-right = smaller normalised x.)
   const bodyEdgeCands = [lm[11],lm[12],lm[13],lm[14],lm[15],lm[16],lm[23],lm[24]]
     .filter(l => l.visibility > 0.4);
-  // After mirror: screen-right corresponds to min normalised x
   const personRightNormX = bodyEdgeCands.length
-    ? Math.min(...bodyEdgeCands.map(l => l.x))
-    : (lShoulder.x < rShoulder.x ? lShoulder.x : rShoulder.x);
+    ? Math.max(...bodyEdgeCands.map(l => l.x))
+    : 0.5;
 
-  // 2. Convert that screen x to world X at the player's depth.
   const hFovRad      = 2 * Math.atan(Math.tan(VFOV_RAD / 2) * threeCamera.aspect);
   const widthAtDepth = 2 * Math.abs(smoothZ) * Math.tan(hFovRad / 2);
-  const personRightWorldX = -(personRightNormX - 0.5) * widthAtDepth; // mirrored
+  const personRightWorldX = (personRightNormX - 0.5) * widthAtDepth;
 
   // 3. Compute the person's half-body width in world space from shoulder span.
   //    We add one full body-width gap so there's clear separation.
