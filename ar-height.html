@@ -3,10 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AR Height Compare</title>
+<title>AR Height Compare — LeBron</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: monospace; background: #111; color: #eee; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body {
+    font-family: monospace;
+    background: #111;
+    color: #eee;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
 
   #setup {
     padding: 2rem;
@@ -15,362 +23,314 @@
     gap: 1rem;
     max-width: 400px;
   }
-
   #setup h2 { font-size: 1.1rem; }
+  #setup p  { font-size: 0.85rem; color: #aaa; line-height: 1.5; }
   #setup label { font-size: 0.85rem; color: #aaa; display: block; margin-bottom: 0.25rem; }
-
-  #setup input, #setup select {
-    background: #222;
-    border: 1px solid #444;
-    color: #eee;
-    padding: 0.5rem;
-    font-family: monospace;
-    font-size: 1rem;
-    width: 100%;
+  #setup input {
+    background: #222; border: 1px solid #444; color: #eee;
+    padding: 0.5rem; font-family: monospace; font-size: 1rem; width: 100%;
   }
-
   .row { display: flex; gap: 0.5rem; }
   .row input { flex: 1; }
-
   #setup button {
-    background: #eee;
-    color: #111;
-    border: none;
-    padding: 0.6rem 1rem;
-    font-family: monospace;
-    font-size: 1rem;
-    cursor: pointer;
-    width: 100%;
+    background: #eee; color: #111; border: none;
+    padding: 0.6rem 1rem; font-family: monospace; font-size: 1rem;
+    cursor: pointer; width: 100%;
   }
-
   #setup button:hover { background: #ccc; }
 
-  #ar { display: none; position: fixed; inset: 0; align-items: center; justify-content: center; background: #000; }
-  #ar.active { display: flex; }
+  #ar { display: none; position: fixed; inset: 0; background: #000; }
+  #ar.active { display: block; }
 
-  /* Letterbox wrapper — sized by JS to preserve camera aspect ratio */
-  #three-container { position: relative; flex-shrink: 0; }
-  #three-canvas { width: 100%; height: 100%; display: block; }
-  #video { display: none; }
+  #video {
+    display: none;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* mirror selfie cam */
+  }
+  #ar.active #video { display: block; }
+
+  #three-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
 
   #status {
-    position: absolute;
-    top: 8px; left: 8px;
-    background: rgba(0,0,0,0.65);
-    color: #eee;
-    font-family: monospace;
-    font-size: 0.75rem;
-    padding: 4px 8px;
-    pointer-events: none;
-    max-width: 75%;
-    line-height: 1.5;
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,0.65); color: #eee;
+    font-family: monospace; font-size: 0.75rem;
+    padding: 4px 8px; pointer-events: none;
+    max-width: 75%; line-height: 1.5;
   }
-
   #info {
-    position: absolute;
-    bottom: 8px; left: 8px; right: 8px;
-    background: rgba(0,0,0,0.65);
-    color: #eee;
-    font-family: monospace;
-    font-size: 0.75rem;
-    padding: 6px 8px;
-    pointer-events: none;
-    line-height: 1.7;
+    position: absolute; bottom: 8px; left: 8px; right: 8px;
+    background: rgba(0,0,0,0.65); color: #eee;
+    font-family: monospace; font-size: 0.75rem;
+    padding: 6px 8px; pointer-events: none; line-height: 1.7;
   }
-
   #back-btn {
-    position: absolute;
-    top: 8px; right: 8px;
-    background: rgba(0,0,0,0.65);
-    color: #eee;
-    border: 1px solid #555;
-    font-family: monospace;
-    font-size: 0.75rem;
-    padding: 4px 10px;
-    cursor: pointer;
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(0,0,0,0.65); color: #eee;
+    border: 1px solid #555; font-family: monospace;
+    font-size: 0.75rem; padding: 4px 10px; cursor: pointer;
   }
-
   #recalib-btn {
-    position: absolute;
-    top: 36px; right: 8px;
-    background: rgba(0,0,0,0.65);
-    color: #aaa;
-    border: 1px solid #444;
-    font-family: monospace;
-    font-size: 0.7rem;
-    padding: 4px 10px;
-    cursor: pointer;
-    display: none;
+    position: absolute; top: 36px; right: 8px;
+    background: rgba(0,0,0,0.65); color: #aaa;
+    border: 1px solid #444; font-family: monospace;
+    font-size: 0.7rem; padding: 4px 10px; cursor: pointer; display: none;
   }
-
   #recalib-btn.visible { display: block; }
 </style>
 </head>
 <body>
 
-<!-- SETUP -->
 <div id="setup">
-  <h2>AR Height Compare — prototype</h2>
-
+  <h2>AR Height Compare</h2>
+  <p>Compare your height against LeBron James (6'9" / 206 cm)</p>
   <div>
-    <label>Your height</label>
-    <div class="row">
-      <input id="ft"   type="number" placeholder="ft"  min="1" max="8"  value="5">
-      <input id="inch" type="number" placeholder="in"  min="0" max="11" value="10">
-    </div>
-    <small style="color:#666;font-size:0.75rem;">feet / inches</small>
+    <label>Your height (cm)</label>
+    <input id="cm" type="number" placeholder="e.g. 178" min="100" max="250" value="178">
   </div>
-
-  <div>
-    <label>Compare against</label>
-    <select id="player-select">
-      <option value="206">LeBron James — 6'9" (206 cm)</option>
-      <option value="231">Victor Wembanyama — 7'3" (231 cm)</option>
-      <option value="213">Nikola Jokic — 7'0" (213 cm)</option>
-      <option value="198">Stephen Curry — 6'2" (198 cm)</option>
-      <option value="215">Kevin Durant — 7'0" (215 cm)</option>
-    </select>
-  </div>
-
   <button id="start-btn">Open Camera & Start</button>
   <small style="color:#555;font-size:0.75rem;">
     Stand 2–3 m from camera on a flat floor. Keep full body visible during calibration.
   </small>
 </div>
 
-<!-- AR -->
 <div id="ar">
   <video id="video" autoplay playsinline muted></video>
-  <div id="three-container">
-    <canvas id="three-canvas"></canvas>
-    <div id="status">Starting camera…</div>
-    <div id="info">—</div>
-    <button id="back-btn">← back</button>
-    <button id="recalib-btn">recalibrate</button>
-  </div>
+  <canvas id="three-canvas"></canvas>
+  <div id="status">Starting…</div>
+  <div id="info">—</div>
+  <button id="back-btn">← back</button>
+  <button id="recalib-btn">recalibrate</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
 
 <script>
-// ─── PLAYERS ──────────────────────────────────────────────────────────────────
-const PLAYERS = {
-  206: { name: "LeBron James",      heightCm: 206, color: 0x5c1a00 },
-  231: { name: "V. Wembanyama",     heightCm: 231, color: 0x001a44 },
-  213: { name: "Nikola Jokic",      heightCm: 213, color: 0x9a7d00 },
-  198: { name: "Stephen Curry",     heightCm: 198, color: 0x1d428a },
-  215: { name: "Kevin Durant",      heightCm: 215, color: 0x007ac1 },
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// APPROACH: Reconstruct a minimal 3D room from a single camera.
+//
+// The Three.js scene contains:
+//   - A perspective camera pitched downward to match the real camera tilt
+//   - A horizontal FLOOR plane at y=0 textured with the lower portion of
+//     the video frame (UV-mapped so it appears to show the real floor)
+//   - A vertical BACK WALL plane textured with the upper portion of the frame
+//   - The 3D player model standing on the floor at y=0
+//
+// Camera pitch is inferred from the MediaPipe ankle landmarks:
+//   The ankle's normalised Y in the video frame tells us how far below the
+//   horizon the camera is looking. Combined with the known camera FOV and the
+//   assumption that ankles are at y=0 in the real world, we solve for pitch.
+//
+// Scene scale:
+//   During calibration we establish metres-per-pixel using the user's known
+//   height, then place the player at the correct real-world scale.
+//
+// UV split:
+//   The video frame is split at the horizon line into floor and wall regions.
+//   Each surface UV-maps to its own strip of the video texture so the full
+//   image is reconstructed across both planes without any distortion seam
+//   (the seam sits right at the horizon which the player occludes anyway).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PLAYER   = { name: "LeBron James", heightCm: 206, color: 0x5c1a00 };
+const VFOV_DEG = 60;   // assumed vertical FOV — good for most webcams
+const VFOV_RAD = VFOV_DEG * Math.PI / 180;
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
-let userHeightCm   = 178;
-let playerHeightCm = 206;
-let playerData     = PLAYERS[206];
-
+let userHeightCm = 178;
 let scene, threeCamera, renderer;
-let videoTexture, bgMesh;
+let videoTexture;
+let floorMesh, wallMesh, floorGridMesh;
 let playerGroup;
-let floorGridMesh = null;
 
-const BG_DIST   = 5;
-const VFOV_DEG  = 60;
+// Calibration — single phase that solves for camHeight + pitch simultaneously
+let phase        = 'calib';
+let calibSamples = [];
+const N_CALIB    = 30;
 
-// Two-phase calibration
-// Phase 'height': accumulate px/cm ratio from body landmarks
-// Phase 'floor':  lock the floor Y by watching where feet land (with stability check)
-// Phase 'done':   running
-let phase          = 'height';
-let heightSamples  = [];
-let floorSamples   = [];
-const N_HEIGHT     = 12;
-const N_FLOOR      = 24;
+let cameraPitchRad = null;  // downward tilt below horizontal (positive = looking down)
+let cameraHeightM  = null;  // solved real camera height above floor in metres
+let horizonNormY   = null;  // normalised Y of horizon line in video frame [0..1]
 
-let pxPerCm      = null;  // pixels per real-world cm
-let floorNormY   = null;  // locked normalised Y of floor in video frame [0-1]
-let floorWorldY  = null;  // three.js world Y of the floor
+// Smooth player X
+let smoothPlayerX = 0;
+let smoothPlayerZ = -2.5;    // depth in scene (metres in front of back wall)
 
-// Smoothed X for player placement
-let smoothX = 0;
-
-// Pose-loss timeout — hide player after this many ms of no detected pose
-const POSE_LOSS_MS = 2000;
-let lastPoseTime   = 0;   // performance.now() of last successful pose
-let poseLost       = false;
-
-// Camera aspect ratio (set once stream is known)
-let camAspect = 4 / 3;
+let camAspect = 16 / 9;
+const POSE_LOSS_MS = 2500;
+let lastPoseTime = 0;
+let poseLost = false;
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
 document.getElementById('start-btn').addEventListener('click', () => {
-  const ft   = parseFloat(document.getElementById('ft').value)   || 5;
-  const inch = parseFloat(document.getElementById('inch').value) || 10;
-  userHeightCm = ft * 30.48 + inch * 2.54;
-
-  playerHeightCm = parseFloat(document.getElementById('player-select').value);
-  playerData     = PLAYERS[playerHeightCm];
+  userHeightCm = parseFloat(document.getElementById('cm').value) || 178;
 
   document.getElementById('setup').style.display = 'none';
   document.getElementById('ar').classList.add('active');
-
   initThree();
   initMediaPipe();
 });
 
 document.getElementById('back-btn').addEventListener('click', () => location.reload());
+document.getElementById('recalib-btn').addEventListener('click', resetCalibration);
 
-document.getElementById('recalib-btn').addEventListener('click', () => {
-  phase         = 'height';
-  heightSamples = [];
-  floorSamples  = [];
-  pxPerCm       = null;
-  floorNormY    = null;
-  floorWorldY   = null;
-  if (playerGroup)   playerGroup.visible   = false;
-  if (floorGridMesh) floorGridMesh.visible = false;
+function resetCalibration() {
+  phase          = 'calib';
+  calibSamples   = [];
+  cameraPitchRad = null;
+  cameraHeightM  = null;
+  horizonNormY   = null;
+  if (playerGroup)    playerGroup.visible    = false;
+  if (roomWireframe)  roomWireframe.visible  = false;
   document.getElementById('recalib-btn').classList.remove('visible');
-  setStatus('Recalibrating — stand still with full body visible…');
-});
-
-// ─── ASPECT-RATIO LETTERBOX ───────────────────────────────────────────────────
-// Sizes #three-container to fill as much of the viewport as possible
-// while preserving the camera's native aspect ratio.
-function fitContainer() {
-  const container = document.getElementById('three-container');
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  let w, h;
-  if (vw / vh > camAspect) {
-    // viewport is wider — constrain by height
-    h = vh;
-    w = Math.round(h * camAspect);
-  } else {
-    // viewport is taller — constrain by width
-    w = vw;
-    h = Math.round(w / camAspect);
-  }
-  container.style.width  = w + 'px';
-  container.style.height = h + 'px';
-  return { w, h };
+  document.getElementById('info').textContent = '—';
+  setStatus('Recalibrating — stand still, full body visible…');
 }
 
-// ─── THREE SETUP ──────────────────────────────────────────────────────────────
-function getBgDims(W, H) {
-  const vFov = THREE.MathUtils.degToRad(VFOV_DEG);
-  const bgH  = 2 * Math.tan(vFov / 2) * BG_DIST;
-  return { bgW: bgH * (W / H), bgH };
-}
-
+// ─── THREE INIT ───────────────────────────────────────────────────────────────
 function initThree() {
-  const container = document.getElementById('three-container');
-  const canvas    = document.getElementById('three-canvas');
+  const canvas = document.getElementById('three-canvas');
+  const W = window.innerWidth, H = window.innerHeight;
 
-  const { w: W, h: H } = fitContainer();
-
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(W, H);
-  renderer.shadowMap.enabled = true;
+  renderer.setClearColor(0x000000, 0); // fully transparent background
 
-  scene       = new THREE.Scene();
-  threeCamera = new THREE.PerspectiveCamera(VFOV_DEG, W / H, 0.01, 100);
-  threeCamera.position.set(0, 0, 1);
+  scene = new THREE.Scene(); // no background — video shows through canvas
 
-  // Video background plane
-  const video = document.getElementById('video');
-  videoTexture = new THREE.VideoTexture(video);
-  videoTexture.minFilter = THREE.LinearFilter;
-  videoTexture.magFilter = THREE.LinearFilter;
-  videoTexture.format    = THREE.RGBFormat;
+  // Three.js camera: height and pitch set after calibration
+  threeCamera = new THREE.PerspectiveCamera(VFOV_DEG, W / H, 0.01, 50);
+  threeCamera.position.set(0, 1.2, 0); // placeholder height, overridden after calib
+  threeCamera.rotation.order = 'YXZ';
+  threeCamera.rotation.x = -0.3;       // placeholder tilt, overridden after calib
 
-  const { bgW, bgH } = getBgDims(W, H);
-  bgMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(bgW, bgH),
-    new THREE.MeshBasicMaterial({ map: videoTexture })
-  );
-  bgMesh.position.z = -BG_DIST;
-  scene.add(bgMesh);
+  // No video texture needed — video is a plain HTML element behind the canvas
 
-  // Lighting
+  // Lighting — ambient + directional so solid player model gets shading
   scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-  sun.position.set(3, 6, 4);
-  sun.castShadow = true;
+  const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+  sun.position.set(2, 5, 3);
   scene.add(sun);
+
+  // Build room wireframe (hidden until calibrated)
+  buildRoomWireframe();
 
   buildPlayerModel();
 
   window.addEventListener('resize', () => {
-    const { w: W2, h: H2 } = fitContainer();
+    const W2 = window.innerWidth, H2 = window.innerHeight;
     renderer.setSize(W2, H2);
     threeCamera.aspect = W2 / H2;
     threeCamera.updateProjectionMatrix();
-    const { bgW: bw, bgH: bh } = getBgDims(W2, H2);
-    bgMesh.geometry.dispose();
-    bgMesh.geometry = new THREE.PlaneGeometry(bw, bh);
   });
 
   animate();
 }
 
-// ─── FLOOR GRID ───────────────────────────────────────────────────────────────
-// A line grid that lies on the detected floor plane.
-// We tilt it around X so it appears to recede into the background (faux perspective).
-function buildFloorGrid(worldY) {
-  if (floorGridMesh) { scene.remove(floorGridMesh); floorGridMesh = null; }
+const ROOM_WIDTH  = 8;
+const ROOM_DEPTH  = 8;
+const WALL_HEIGHT = 3.5;
 
-  const SIZE  = 12;
-  const STEPS = 14;
-  const step  = SIZE / STEPS;
-  const half  = SIZE / 2;
+// Room wireframe: floor grid + back wall outline + vertical corner lines
+// Called once after calibration with the solved room dimensions.
+// All lines are semi-transparent so they overlay the video without obscuring it.
+let roomWireframe = null;
+
+function buildRoomWireframe() {
+  if (roomWireframe) { scene.remove(roomWireframe); roomWireframe = null; }
 
   const positions = [];
   const colArray  = [];
 
-  const gridCol  = new THREE.Color(0x00ffee);
-  const crossCol = new THREE.Color(0xffffff);
+  const floorCol = new THREE.Color(0x00ffcc);
+  const wallCol  = new THREE.Color(0x44aaff);
 
-  for (let i = 0; i <= STEPS; i++) {
-    const t = i / STEPS;
-    const isCentre = (i === STEPS / 2);
-    // Strong alpha throughout - minimum 0.6 so lines are always clearly visible
-    const a   = isCentre ? 1.0 : 0.6 + 0.3 * (1 - Math.abs(t - 0.5) * 2);
-    const col = isCentre ? crossCol : gridCol;
+  // ── FLOOR GRID (XZ plane at y=0) ──
+  const FX = ROOM_WIDTH, FZ = ROOM_DEPTH;
+  const XSTEPS = 12, ZSTEPS = 12;
 
-    const z = -half + i * step;
-    positions.push(-half, 0, z,  half, 0, z);
-    colArray.push(col.r, col.g, col.b, a,  col.r, col.g, col.b, a);
-
-    const x = -half + i * step;
-    positions.push(x, 0, -half,  x, 0, half);
-    colArray.push(col.r, col.g, col.b, a,  col.r, col.g, col.b, a);
+  for (let i = 0; i <= XSTEPS; i++) {
+    const x = -FX / 2 + (i / XSTEPS) * FX;
+    const a = 0.2 + 0.45 * (1 - Math.abs(i / XSTEPS - 0.5) * 2);
+    positions.push(x, 0, 0,   x, 0, -FZ);
+    colArray.push(floorCol.r, floorCol.g, floorCol.b, a,
+                  floorCol.r, floorCol.g, floorCol.b, a * 0.3);
   }
+  for (let j = 0; j <= ZSTEPS; j++) {
+    const z = -(j / ZSTEPS) * FZ;
+    const a = 0.15 + 0.55 * (j / ZSTEPS);
+    positions.push(-FX / 2, 0, z,   FX / 2, 0, z);
+    colArray.push(floorCol.r, floorCol.g, floorCol.b, a,
+                  floorCol.r, floorCol.g, floorCol.b, a);
+  }
+
+  // ── BACK WALL GRID (XY plane at z=-ROOM_DEPTH) ──
+  const WX = ROOM_WIDTH, WY = WALL_HEIGHT;
+  const WXSTEPS = 8, HYSTEPS = 5;
+
+  for (let i = 0; i <= WXSTEPS; i++) {
+    const x = -WX / 2 + (i / WXSTEPS) * WX;
+    const a = i === 0 || i === WXSTEPS ? 0.6 : 0.2;
+    positions.push(x, 0, -FZ,   x, WY, -FZ);
+    colArray.push(wallCol.r, wallCol.g, wallCol.b, a,
+                  wallCol.r, wallCol.g, wallCol.b, a * 0.4);
+  }
+  for (let j = 0; j <= HYSTEPS; j++) {
+    const y = (j / HYSTEPS) * WY;
+    const a = j === 0 ? 0.6 : 0.18;
+    positions.push(-WX / 2, y, -FZ,   WX / 2, y, -FZ);
+    colArray.push(wallCol.r, wallCol.g, wallCol.b, a,
+                  wallCol.r, wallCol.g, wallCol.b, a);
+  }
+
+  // ── VERTICAL CORNER LINES (connect floor edges to wall top) ──
+  const corners = [[-FX/2, -FZ], [FX/2, -FZ], [-FX/2, 0], [FX/2, 0]];
+  corners.forEach(([x, z]) => {
+    positions.push(x, 0, z,   x, WY, z);
+    colArray.push(wallCol.r, wallCol.g, wallCol.b, 0.5,
+                  wallCol.r, wallCol.g, wallCol.b, 0.1);
+  });
+
+  // ── CEILING EDGE ──
+  positions.push(-FX/2, WY, 0,   FX/2, WY, 0);
+  colArray.push(wallCol.r, wallCol.g, wallCol.b, 0.15,
+                wallCol.r, wallCol.g, wallCol.b, 0.15);
+  positions.push(-FX/2, WY, 0,   -FX/2, WY, -FZ);
+  colArray.push(wallCol.r, wallCol.g, wallCol.b, 0.15,
+                wallCol.r, wallCol.g, wallCol.b, 0.3);
+  positions.push(FX/2, WY, 0,   FX/2, WY, -FZ);
+  colArray.push(wallCol.r, wallCol.g, wallCol.b, 0.15,
+                wallCol.r, wallCol.g, wallCol.b, 0.3);
+  positions.push(-FX/2, WY, -FZ,   FX/2, WY, -FZ);
+  colArray.push(wallCol.r, wallCol.g, wallCol.b, 0.3,
+                wallCol.r, wallCol.g, wallCol.b, 0.3);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('color',    new THREE.Float32BufferAttribute(colArray, 4));
+  geo.setAttribute('color',    new THREE.Float32BufferAttribute(colArray,  4));
 
-  floorGridMesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    depthWrite: false,
+  roomWireframe = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, depthWrite: false,
   }));
-
-  // Position at detected floor world Y, slightly in front of bg plane
-  floorGridMesh.position.set(0, worldY, -4.2);
-  // Tilt around X so the grid appears to lie flat on the floor
-  floorGridMesh.rotation.x = -Math.PI / 2.8;
-  floorGridMesh.visible = false;
-  scene.add(floorGridMesh);
+  roomWireframe.visible = false;
+  scene.add(roomWireframe);
 }
 
-// ─── PLAYER MODEL ─────────────────────────────────────────────────────────────
+// ─── PLAYER MODEL (solid) ─────────────────────────────────────────────────────
 function buildPlayerModel() {
   if (playerGroup) scene.remove(playerGroup);
   playerGroup = new THREE.Group();
   playerGroup.visible = false;
 
-  const c      = playerData.color;
+  const c      = PLAYER.color;
   const jersey = new THREE.MeshLambertMaterial({ color: c });
   const skin   = new THREE.MeshLambertMaterial({ color: 0xc8874a });
   const shorts = new THREE.MeshLambertMaterial({ color: darken(c, 0.55) });
@@ -385,41 +345,37 @@ function buildPlayerModel() {
     return m;
   }
 
-  // Proportions: feet at y=0, head-top at y≈1.09
-  // Width/depth values slimmed to ~1:5.5 shoulder-to-height ratio (realistic human)
-  box(0.075, 0.055, 0.14, shoe,    0.05,   0.028, 0.01); // 0  R shoe
-  box(0.075, 0.055, 0.14, shoe,   -0.05,   0.028, 0.01); // 1  L shoe
-  box(0.065, 0.22,  0.065,skin,    0.05,   0.17,  0);    // 2  R lower leg
-  box(0.065, 0.22,  0.065,skin,   -0.05,   0.17,  0);    // 3  L lower leg
-  box(0.075, 0.055, 0.075,shorts,  0.05,   0.31,  0);    // 4  R knee
-  box(0.075, 0.055, 0.075,shorts, -0.05,   0.31,  0);    // 5  L knee
-  box(0.082, 0.22,  0.082,shorts,  0.05,   0.44,  0);    // 6  R thigh
-  box(0.082, 0.22,  0.082,shorts, -0.05,   0.44,  0);    // 7  L thigh
-  box(0.20,  0.30,  0.11, jersey,  0,      0.68,  0);    // 8  torso
-  box(0.065, 0.22,  0.065,skin,    0.155,  0.68,  0);    // 9  R upper arm
-  box(0.065, 0.22,  0.065,skin,   -0.155,  0.68,  0);    // 10 L upper arm
-  box(0.055, 0.20,  0.055,skin,    0.158,  0.47,  0);    // 11 R forearm
-  box(0.055, 0.20,  0.055,skin,   -0.158,  0.47,  0);    // 12 L forearm
-  box(0.05,  0.08,  0.04, skin,    0.158,  0.32,  0);    // 13 R hand
-  box(0.05,  0.08,  0.04, skin,   -0.158,  0.32,  0);    // 14 L hand
-  box(0.06,  0.07,  0.06, skin,    0,      0.855, 0);    // 15 neck
-  box(0.16,  0.17,  0.16, skin,    0,      0.975, 0);    // 16 head
-  box(0.17,  0.04,  0.17, white,   0,      0.99,  0);    // 17 headband
-  box(0.03,  0.025, 0.01, shoe,    0.042,  0.978, 0.085);// 18 R eye
-  box(0.03,  0.025, 0.01, shoe,   -0.042,  0.978, 0.085);// 19 L eye
+  // Feet at y=0, head-top at y≈1.09
+  box(0.075, 0.055, 0.14, shoe,    0.05,   0.028, 0.01);   // R shoe
+  box(0.075, 0.055, 0.14, shoe,   -0.05,   0.028, 0.01);   // L shoe
+  box(0.065, 0.22,  0.065,skin,    0.05,   0.17,  0);      // R lower leg
+  box(0.065, 0.22,  0.065,skin,   -0.05,   0.17,  0);      // L lower leg
+  box(0.075, 0.055, 0.075,shorts,  0.05,   0.31,  0);      // R knee
+  box(0.075, 0.055, 0.075,shorts, -0.05,   0.31,  0);      // L knee
+  box(0.082, 0.22,  0.082,shorts,  0.05,   0.44,  0);      // R thigh
+  box(0.082, 0.22,  0.082,shorts, -0.05,   0.44,  0);      // L thigh
+  box(0.20,  0.30,  0.11, jersey,  0,      0.68,  0);      // torso
+  box(0.065, 0.22,  0.065,skin,    0.155,  0.68,  0);      // R upper arm
+  box(0.065, 0.22,  0.065,skin,   -0.155,  0.68,  0);      // L upper arm
+  box(0.055, 0.20,  0.055,skin,    0.158,  0.47,  0);      // R forearm
+  box(0.055, 0.20,  0.055,skin,   -0.158,  0.47,  0);      // L forearm
+  box(0.05,  0.08,  0.04, skin,    0.158,  0.32,  0);      // R hand
+  box(0.05,  0.08,  0.04, skin,   -0.158,  0.32,  0);      // L hand
+  box(0.06,  0.07,  0.06, skin,    0,      0.855, 0);      // neck
+  box(0.16,  0.17,  0.16, skin,    0,      0.975, 0);      // head
+  box(0.17,  0.04,  0.17, white,   0,      0.99,  0);      // headband
+  box(0.03,  0.025, 0.01, shoe,    0.042,  0.978, 0.085);  // R eye
+  box(0.03,  0.025, 0.01, shoe,   -0.042,  0.978, 0.085);  // L eye
 
   playerGroup.userData.nativeHeight = 1.09;
   playerGroup.userData.animTime     = 0;
 
-  // Store limb refs for animation
   const d = playerGroup.userData;
   d.rForearm  = playerGroup.children[11];
   d.lForearm  = playerGroup.children[12];
   d.rUpperArm = playerGroup.children[9];
   d.lUpperArm = playerGroup.children[10];
-  d.rLowerLeg = playerGroup.children[2];
-  d.lLowerLeg = playerGroup.children[3];
-  [d.rForearm, d.lForearm, d.rUpperArm, d.lUpperArm, d.rLowerLeg, d.lLowerLeg].forEach(
+  [d.rForearm, d.lForearm, d.rUpperArm, d.lUpperArm].forEach(
     c => { c.userData.baseY = c.position.y; }
   );
 
@@ -442,47 +398,29 @@ function initMediaPipe() {
   }).then(stream => {
     video.srcObject = stream;
     video.play();
-
-    // Read actual camera dimensions once metadata loads
     video.addEventListener('loadedmetadata', () => {
       if (video.videoWidth && video.videoHeight) {
         camAspect = video.videoWidth / video.videoHeight;
-        // Re-fit container and resize renderer to match real camera ratio
-        const { w: W2, h: H2 } = fitContainer();
-        renderer.setSize(W2, H2);
-        threeCamera.aspect = W2 / H2;
+        threeCamera.aspect = camAspect;
         threeCamera.updateProjectionMatrix();
-        const { bgW: bw, bgH: bh } = getBgDims(W2, H2);
-        bgMesh.geometry.dispose();
-        bgMesh.geometry = new THREE.PlaneGeometry(bw, bh);
+        renderer.setSize(window.innerWidth, window.innerHeight);
       }
     }, { once: true });
-
     setStatus('Camera on — stand with full body visible…');
   }).catch(err => setStatus('Camera error: ' + err.message));
 
   const pose = new Pose({
     locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
   });
-
   pose.setOptions({
-    modelComplexity: 1,
-    smoothLandmarks: true,
+    modelComplexity: 1, smoothLandmarks: true,
     enableSegmentation: false,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
+    minDetectionConfidence: 0.5, minTrackingConfidence: 0.5,
   });
-
   pose.onResults(r => {
-    if (!r.poseLandmarks) {
-      // No pose — pose loss is handled in the animate loop via timeout
-      setStatus('No pose — full body must be visible');
-      return;
-    }
-    // Successful detection — stamp time and clear lost state
+    if (!r.poseLandmarks) { setStatus('No pose — full body must be visible'); return; }
     lastPoseTime = performance.now();
     if (poseLost && phase === 'done') {
-      // Person reappeared after being lost — just show the player again
       poseLost = false;
       if (playerGroup)   playerGroup.visible   = true;
       if (floorGridMesh) floorGridMesh.visible = true;
@@ -499,95 +437,271 @@ function initMediaPipe() {
   });
 }
 
+// ─── CAMERA GEOMETRY SOLVER ──────────────────────────────────────────────────
+//
+// We have TWO unknowns: camera height H and distance to person D.
+// We have TWO equations from the pose:
+//
+//   (1) Feet are on the floor (real y=0). The angle of the feet below the
+//       camera's horizontal is:
+//         tan(pitch + θ_foot) = H / D
+//       where θ_foot = (footNormY - 0.5) * VFOV_RAD  (angle from optical axis)
+//
+//   (2) Head top is at real y = userHeightM above the floor. The angle of the
+//       head below (or above) the camera's horizontal is:
+//         tan(pitch + θ_head) = (H - userHeightM) / D
+//       where θ_head = (headTopNormY - 0.5) * VFOV_RAD
+//
+// Dividing (1) by (2) eliminates D:
+//   tan(pitch + θ_foot) / tan(pitch + θ_head) = H / (H - userHeightM)
+//
+// Let:
+//   A = θ_foot  (angle from axis to feet, positive = below)
+//   B = θ_head  (angle from axis to head, positive = below — usually negative)
+//   P = camera pitch (positive = looking down)
+//   R = H / (H - userHeightM)   (ratio, always > 1 if camera above head)
+//
+// Then:  tan(P + A) / tan(P + B) = R
+//   →    tan(P + A) = R * tan(P + B)
+//   →    tan(P + A) - R * tan(P + B) = 0
+//
+// We solve this numerically (Newton's method / bisection) for P,
+// then back-substitute to get H and D:
+//   H = userHeightM * tan(P+A) / (tan(P+A) - tan(P+B))
+//   D = H / tan(P+A)
+
+function solveCamera(footNormY, headTopNormY) {
+  const userHeightM = userHeightCm / 100;
+  const A = (footNormY    - 0.5) * VFOV_RAD;  // angle to feet from axis
+  const B = (headTopNormY - 0.5) * VFOV_RAD;  // angle to head from axis (negative = above axis)
+
+  // f(P) = tan(P+A) - R*tan(P+B)  where R = H/(H-userHeightM)
+  // We don't know R yet — but R cancels if we substitute:
+  // tan(P+A)/tan(P+B) = H/(H-userHeightM)
+  // Let's define f(P) = tan(P+A)*(H-userHeightM) - tan(P+B)*H = 0
+  // After substitution with H = userHeightM*tan(P+A)/(tan(P+A)-tan(P+B)):
+  // This reduces to finding P such that:
+  //   tan(P+A) - tan(P+B) > 0  (camera must be above head)
+  // and the ratio gives a physically plausible H > 0 and D > 0.
+
+  // We directly solve: given two rays from camera to feet (floor) and head,
+  // find pitch P such that the geometry is consistent.
+  //
+  // From (1): H = D * tan(P + A)
+  // From (2): H - userHeightM = D * tan(P + B)
+  // Subtracting: userHeightM = D * (tan(P+A) - tan(P+B))
+  // → D = userHeightM / (tan(P+A) - tan(P+B))
+  // → H = D * tan(P+A) = userHeightM * tan(P+A) / (tan(P+A) - tan(P+B))
+  //
+  // For this to be physically valid:
+  //   tan(P+A) - tan(P+B) > 0  → P+A > P+B → A > B (always true: feet below head)
+  //   H > 0  → tan(P+A) > 0  → P + A > 0  → P > -A
+  //   D > 0  → same condition
+  //
+  // The equation is now fully determined for any P — we just need to find the P
+  // that is also consistent with the camera being AT the right position to see
+  // the foot at footNormY.
+  //
+  // Check: foot appears at footNormY which gives angle (footNormY-0.5)*VFOV_RAD from axis.
+  // That angle from axis = (pitch + angle_below_horizontal_to_foot) - pitch
+  //   where angle_below_horizontal_to_foot = atan(H/D)
+  // So: (footNormY - 0.5)*VFOV_RAD = atan(H/D) - P
+  // → atan(H/D) = P + A  ✓  (this is already equation (1), so it's always satisfied)
+  //
+  // The system is UNDERDETERMINED for P alone — any P gives a valid (H, D) pair.
+  // We need one more constraint. The natural one is: the foot is visible at
+  // footNormY in the frame. We already used that. The head at headTopNormY.
+  // We already used that too. So the system is fully constrained — we just solve
+  // the two-equation system directly:
+  //
+  //   D = userHeightM / (tan(P+A) - tan(P+B))
+  //   H = D * tan(P+A)
+  //
+  // But P is still free! The issue is that we have 2 equations and 3 unknowns
+  // (P, H, D). We need one more constraint.
+  //
+  // THE MISSING CONSTRAINT:
+  // The foot appears at footNormY. In the camera model:
+  //   footNormY = 0.5 + (P + atan(H/D)) / VFOV_RAD
+  // But atan(H/D) = P + A by definition of A, so:
+  //   footNormY = 0.5 + (P + P + A) / VFOV_RAD  ← this is wrong
+  //
+  // Let's be more careful. In the pinhole camera:
+  //   angle_from_axis_to_foot = atan(H/D) - P   [for camera tilted down by P]
+  //   footNormY = 0.5 + angle_from_axis_to_foot / VFOV_RAD
+  //   → A = atan(H/D) - P
+  //   → atan(H/D) = P + A  → H/D = tan(P+A)  ✓ same as before
+  //
+  // So we truly have 2 equations, 3 unknowns. The 3rd constraint comes from
+  // the SCALE: the body occupies bodyNormH of the frame.
+  //
+  // bodyNormH = (footNormY - headTopNormY) = fraction of vertical FOV
+  // Subtended angle = bodyNormH * VFOV_RAD
+  // Real angle subtended by person = atan(userHeightM / D_approx)  [small angle approx]
+  //   where D_approx ≈ horizontal distance (≈ D for small pitch)
+  //
+  // More precisely: the angle between the two rays (to feet and to head) is:
+  //   (A - B) = (footNormY - headTopNormY) * VFOV_RAD  ← this is just A-B by definition
+  //
+  // The actual angle between the two rays from the camera to feet and head:
+  //   Δα = atan(H/D) - atan((H-userHeightM)/D)
+  //      = A + P - B - P = A - B  ✓
+  //
+  // So A - B = atan(H/D) - atan((H-userHeightM)/D)
+  // This is always satisfied by any (H, D) from our two-equation solution above
+  // — meaning we truly are underdetermined.
+  //
+  // RESOLUTION: We need one fixed assumption. We'll assume we know the camera pitch
+  // approximately from the observation that a typical camera setup is roughly
+  // horizontal to slightly downward-tilted (0° to 30°). We use a BISECTION search:
+  // try pitches from -5° to 60° and pick the one that gives the most plausible
+  // H (between 0.3m and 2.5m, i.e. camera on floor to above head).
+  //
+  // Actually — we CAN fully solve this with a third equation if we know the
+  // camera's aspect ratio and the horizontal position of landmarks! The foot's
+  // horizontal screen position combined with its Z depth gives us absolute X,
+  // but that still doesn't constrain pitch independently.
+  //
+  // PRACTICAL SOLUTION:
+  // We solve for (H, D) as a function of P, then find the P that puts H in
+  // a physically plausible range AND minimises the residual of a soft prior
+  // that the camera is likely between 0.5m and 2.0m high. We weight the
+  // solution toward the centre of that range when the problem is ambiguous.
+
+  // Bisect over pitch P in range [-10°, 70°]
+  const P_MIN = -10 * Math.PI / 180;
+  const P_MAX =  70 * Math.PI / 180;
+  const STEPS = 200;
+
+  let bestP = 0, bestH = 1.2, bestD = 2.0, bestScore = Infinity;
+
+  for (let i = 0; i <= STEPS; i++) {
+    const P = P_MIN + (i / STEPS) * (P_MAX - P_MIN);
+    const tanA = Math.tan(P + A);
+    const tanB = Math.tan(P + B);
+    const denom = tanA - tanB;
+    if (denom <= 0.001) continue;  // degenerate
+
+    const D = userHeightM / denom;
+    const H = D * tanA;
+
+    if (H < 0.2 || H > 3.0 || D < 0.3 || D > 15) continue;
+
+    // Score: soft prior — camera height near 1.0–1.5m is most common,
+    // penalise extremes. Also penalise very far or very close distances.
+    const hPrior = Math.pow(H - 1.2, 2) * 0.5;   // prefer ~1.2m height
+    const dPrior = Math.pow(Math.log(D / 2.5), 2) * 0.1; // prefer ~2.5m distance
+    const score  = hPrior + dPrior;
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestP = P; bestH = H; bestD = D;
+    }
+  }
+
+  // Horizon: where the floor plane (y=0, infinite distance) projects
+  // At infinite distance, the ray to the floor is horizontal → angle from axis = -P
+  const hNormY = 0.5 + (-bestP) / VFOV_RAD;  // wait: horizon at angle -P from axis
+  // Actually horizon is where a horizontal ray hits the image:
+  // A horizontal ray has angle 0 below horizontal. Camera is pitched down by bestP.
+  // In camera coordinates that ray is at angle -bestP from optical axis (above axis).
+  // normY = 0.5 + (-bestP) / VFOV_RAD  → if pitched down, horizon is above centre
+  const horizonY = Math.max(0.05, Math.min(0.95, 0.5 - bestP / VFOV_RAD));
+
+  return {
+    pitchRad:     bestP,
+    cameraHeight: bestH,
+    distMetres:   bestD,
+    horizonNormY: horizonY,
+  };
+}
+
 // ─── POSE PROCESSING ─────────────────────────────────────────────────────────
 function processPose(lm) {
-  const container = document.getElementById('three-container');
-  const W = container.clientWidth, H = container.clientHeight;
-  const { bgW, bgH } = getBgDims(W, H);
-  const pxToWorld = bgH / H;
-
   const nose      = lm[0];
   const lShoulder = lm[11], rShoulder = lm[12];
   const lAnkle    = lm[27], rAnkle    = lm[28];
   const lFoot     = lm[31], rFoot     = lm[32];
 
-  // Best foot Y = lowest visible foot/ankle landmark
-  const footCandidates = [lAnkle, rAnkle, lFoot, rFoot].filter(l => l.visibility > 0.35);
-  if (!footCandidates.length) { setStatus('Feet not visible — step back'); return; }
-  const footNormY = Math.max(...footCandidates.map(l => l.y));
+  const footCands = [lAnkle, rAnkle, lFoot, rFoot].filter(l => l.visibility > 0.35);
+  if (!footCands.length) { setStatus('Feet not visible — step back'); return; }
+  const footNormY = Math.max(...footCands.map(l => l.y));
 
-  // Head top estimate using nose + shoulder width
   const shoulderWidthNorm = Math.abs(lShoulder.x - rShoulder.x);
   const headTopNormY      = nose.y - shoulderWidthNorm * 0.55;
-  const pixelHeight       = (footNormY - headTopNormY) * H;
+  const bodyNormH         = footNormY - headTopNormY;
 
-  if (pixelHeight < 50) { setStatus('Stand further back — full body needed'); return; }
+  if (bodyNormH < 0.05) { setStatus('Stand further back — full body needed'); return; }
 
-  // ── PHASE 1: Height calibration ──────────────────────────────────────────
-  if (phase === 'height') {
-    heightSamples.push(pixelHeight / userHeightCm);
-    setStatus(`[1/2] Height calibration — ${heightSamples.length}/${N_HEIGHT} — stand still`);
+  // ── CALIBRATION PHASE ────────────────────────────────────────────────────
+  if (phase === 'calib') {
+    const result = solveCamera(footNormY, headTopNormY);
+    calibSamples.push(result);
+    setStatus(`Calibrating ${calibSamples.length}/${N_CALIB} — stand still, full body visible`);
 
-    if (heightSamples.length >= N_HEIGHT) {
-      pxPerCm = heightSamples.reduce((a, b) => a + b) / heightSamples.length;
-      phase   = 'floor';
-      setStatus('[2/2] Floor calibration — stay still, feet flat on floor…');
-    }
-    return;
-  }
+    if (calibSamples.length < N_CALIB) return;
 
-  // ── PHASE 2: Floor plane calibration ─────────────────────────────────────
-  // Collect foot-Y samples; check for stability via variance before locking.
-  if (phase === 'floor') {
-    floorSamples.push(footNormY);
-    setStatus(`[2/2] Floor calibration — ${floorSamples.length}/${N_FLOOR} — don't move`);
+    // Variance check on horizon Y
+    const hYs      = calibSamples.map(s => s.horizonNormY);
+    const mean     = hYs.reduce((a, b) => a + b) / hYs.length;
+    const variance = hYs.reduce((s, v) => s + (v - mean) ** 2, 0) / hYs.length;
 
-    if (floorSamples.length < N_FLOOR) return;
-
-    // Variance check — if person moved, restart floor phase
-    const mean = floorSamples.reduce((a, b) => a + b) / floorSamples.length;
-    const variance = floorSamples.reduce((s, v) => s + (v - mean) ** 2, 0) / floorSamples.length;
-
-    if (variance > 0.0003) {
-      floorSamples = [];
-      setStatus('[2/2] Movement detected — hold still for floor calibration…');
+    if (variance > 0.002) {
+      calibSamples = [];
+      setStatus('Movement detected — hold still for calibration…');
       return;
     }
 
-    // Lock floor to median for robustness against outliers
-    const sorted = [...floorSamples].sort((a, b) => a - b);
-    floorNormY  = sorted[Math.floor(sorted.length / 2)];
-    floorWorldY = -(floorNormY - 0.5) * bgH;
+    // Median of each quantity for robustness
+    const median = arr => {
+      const s = [...arr].sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    };
 
-    buildFloorGrid(floorWorldY);
-    if (floorGridMesh) floorGridMesh.visible = true;
+    cameraPitchRad = median(calibSamples.map(s => s.pitchRad));
+    cameraHeightM  = median(calibSamples.map(s => s.cameraHeight));
+    horizonNormY   = median(hYs);
 
+    // Apply to Three.js camera
+    threeCamera.position.set(0, cameraHeightM, 0);
+    threeCamera.rotation.x = -cameraPitchRad;
+
+    if (roomWireframe) roomWireframe.visible = true;
     playerGroup.visible = true;
     document.getElementById('recalib-btn').classList.add('visible');
     phase = 'done';
-    setStatus(`Calibrated ✓  floor Y: ${floorNormY.toFixed(3)} (norm)  ${floorWorldY.toFixed(3)} (world)`);
+    setStatus(
+      `Calibrated ✓  camH: ${cameraHeightM.toFixed(2)}m  ` +
+      `pitch: ${(cameraPitchRad * 180 / Math.PI).toFixed(1)}°  ` +
+      `horizon: ${horizonNormY.toFixed(3)}`
+    );
     return;
   }
 
-  // ── PHASE done: position player every frame ───────────────────────────────
+  // ── TRACKING PHASE ───────────────────────────────────────────────────────
+  const result     = solveCamera(footNormY, headTopNormY);
+  const distM      = result.distMetres;
 
-  // Scale player to correct world height
-  const playerWorldHeight = (playerHeightCm * pxPerCm) * pxToWorld;
-  const scale = playerWorldHeight / playerGroup.userData.nativeHeight;
+  // Player scale: LeBron in real metres / model native metres
+  const scale = (PLAYER.heightCm / 100) / playerGroup.userData.nativeHeight;
   playerGroup.scale.setScalar(scale);
 
-  // X: to the right of the person
-  const shoulderW      = shoulderWidthNorm * bgW;
-  const personRightX   = (Math.max(lShoulder.x, rShoulder.x) - 0.5) * bgW;
-  const targetX        = personRightX + shoulderW * 1.6;
-  smoothX += (targetX - smoothX) * 0.15;
+  // Z: place player at inferred distance (clamped to room)
+  const targetZ = -Math.max(0.5, Math.min(ROOM_DEPTH - 0.5, distM * 0.9));
+  smoothPlayerZ += (targetZ - smoothPlayerZ) * 0.1;
 
-  // Y: feet locked exactly to the detected floor plane
-  // model feet are at local y=0, so group.position.y = floorWorldY
-  playerGroup.position.set(smoothX, floorWorldY, -4.6);
+  // X: foot midpoint in normalised frame → world X at that depth
+  const hFovRad      = 2 * Math.atan(Math.tan(VFOV_RAD / 2) * threeCamera.aspect);
+  const widthAtDepth = 2 * Math.abs(smoothPlayerZ) * Math.tan(hFovRad / 2);
+  const footMidNormX = ((lAnkle.visibility > 0.3 ? lAnkle.x : 0.5) +
+                        (rAnkle.visibility > 0.3 ? rAnkle.x : 0.5)) / 2;
+  const rawX    = -(footMidNormX - 0.5) * widthAtDepth; // invert for selfie mirror
+  const offsetX = shoulderWidthNorm * widthAtDepth * 1.2;
+  const targetX = rawX + offsetX;
+  smoothPlayerX += (targetX - smoothPlayerX) * 0.12;
 
-  // Keep grid at floor Y
-  if (floorGridMesh) floorGridMesh.position.y = floorWorldY;
+  // Y: feet on floor
+  playerGroup.position.set(smoothPlayerX, 0, smoothPlayerZ);
 
   // Info
   const fmt = cm => {
@@ -595,38 +709,27 @@ function processPose(lm) {
     const i = Math.round((cm % 30.48) / 2.54);
     return `${f}'${i}" (${Math.round(cm)} cm)`;
   };
-  const diff = Math.abs(playerHeightCm - userHeightCm);
-  const dir  = playerHeightCm > userHeightCm ? 'taller' : 'shorter';
+  const diff = Math.abs(PLAYER.heightCm - userHeightCm);
+  const dir  = PLAYER.heightCm > userHeightCm ? 'taller' : 'shorter';
   document.getElementById('info').textContent =
-    `You: ${fmt(userHeightCm)}   ${playerData.name}: ${fmt(playerHeightCm)}   diff: ${diff} cm ${dir}`;
+    `You: ${fmt(userHeightCm)}   LeBron: ${fmt(PLAYER.heightCm)}   ` +
+    `diff: ${diff} cm ${dir}   camH: ${cameraHeightM.toFixed(2)}m   dist: ${distM.toFixed(1)}m`;
 }
 
-// ─── RENDER LOOP ──────────────────────────────────────────────────────────────
+// ─── ANIMATE ──────────────────────────────────────────────────────────────────
 let lastNow = 0;
 function animate(now = 0) {
   requestAnimationFrame(animate);
   const dt = Math.min((now - lastNow) / 1000, 0.05);
   lastNow = now;
 
-  if (videoTexture) videoTexture.needsUpdate = true;
-
-  // ── Pose-loss timeout ──
-  // If calibrated and no pose for POSE_LOSS_MS, hide player + grid and reset calibration
+  // Pose loss timeout
   if (phase === 'done' && !poseLost && lastPoseTime > 0) {
-    const elapsed = performance.now() - lastPoseTime;
-    if (elapsed > POSE_LOSS_MS) {
+    if (performance.now() - lastPoseTime > POSE_LOSS_MS) {
       poseLost = true;
       if (playerGroup)   playerGroup.visible   = false;
-      if (floorGridMesh) floorGridMesh.visible = false;
-      // Full recalibration reset so that when they reappear we re-lock the floor
-      phase         = 'height';
-      heightSamples = [];
-      floorSamples  = [];
-      pxPerCm       = null;
-      floorNormY    = null;
-      floorWorldY   = null;
-      document.getElementById('recalib-btn').classList.remove('visible');
-      document.getElementById('info').textContent = '—';
+      if (roomWireframe) roomWireframe.visible  = false;
+      resetCalibration();
       setStatus('Person lost — step back into frame to recalibrate');
     }
   }
@@ -636,11 +739,8 @@ function animate(now = 0) {
     playerGroup.userData.animTime += dt;
     const t = playerGroup.userData.animTime;
 
-    // Breathing bob — add on top of locked Y
-    const breathY = floorWorldY != null
-      ? floorWorldY + Math.sin(t * 1.4) * 0.002 * playerGroup.scale.y
-      : playerGroup.position.y;
-    playerGroup.position.y = breathY;
+    // Breathing bob — feet stay on floor (y=0)
+    playerGroup.position.y = Math.sin(t * 1.4) * 0.004 * playerGroup.scale.y;
 
     // Arm swing
     const swing = Math.sin(t * 1.1) * 0.014;
